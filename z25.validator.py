@@ -667,10 +667,11 @@ def main():
 
     st.divider()
 
-    # Trade navigator
-    col_nav, col_filter = st.columns([3, 1])
-    with col_filter:
+    # Trade navigator — filters + chained date/time selectors
+    f1, f2, f3, f4 = st.columns([2, 2, 1, 1])
+    with f3:
         filter_side = st.selectbox("Filter side", ["All", "LONG", "SHORT"])
+    with f4:
         filter_exit = st.selectbox("Filter exit", ["All", "target", "stop hit", "BE", "cash close"])
 
     filtered = [(i, t) for i, t in enumerate(trades)
@@ -681,29 +682,53 @@ def main():
         st.warning("No trades match the current filter.")
         return
 
-    with col_nav:
-        trade_labels = [
-            f"#{i+1}  {t['trade_date']}  {t['side']}  {t.get('notes','').upper()}  "
-            f"{'🟢' if t.get('pnl',0)>0 else '🔴' if t.get('pnl',0)<0 else '🟡'}  ${int(t.get('pnl',0)):+,}"
-            for i, t in filtered
-        ]
-        sel = st.selectbox("Select trade", range(len(filtered)),
-                           index=min(st.session_state.trade_idx, len(filtered)-1),
-                           format_func=lambda x: trade_labels[x])
+    # Date selector
+    dates = sorted(set(str(t['trade_date']) for _, t in filtered))
+    # Clamp stored index to valid range
+    stored_idx = min(st.session_state.trade_idx, len(filtered) - 1)
+    stored_date = str(filtered[stored_idx][1]['trade_date'])
+    date_idx = dates.index(stored_date) if stored_date in dates else 0
 
-    st.session_state.trade_idx = sel
+    with f1:
+        sel_date = st.selectbox("Date", dates, index=date_idx)
 
+    # Time selector — only trades on selected date
+    day_filtered = [(i, t) for i, t in filtered if str(t['trade_date']) == sel_date]
+
+    def trade_time_label(t):
+        ent = str(t.get('entry_time', ''))[-8:-3]
+        note = t.get('notes', '').upper()
+        icon = '🟢' if t.get('pnl', 0) > 0 else '🔴' if t.get('pnl', 0) < 0 else '🟡'
+        return f"{ent}  {t['side']}  {note}  {icon}  ${int(t.get('pnl', 0)):+,}"
+
+    time_labels = [trade_time_label(t) for _, t in day_filtered]
+
+    # If the stored trade is on this date, pre-select it; otherwise default to 0
+    stored_orig_idx = filtered[stored_idx][0]
+    day_sel_default = next(
+        (k for k, (i, _) in enumerate(day_filtered) if i == stored_orig_idx), 0)
+
+    with f2:
+        day_sel = st.selectbox("Time / trade", range(len(day_filtered)),
+                               index=day_sel_default,
+                               format_func=lambda x: time_labels[x])
+
+    orig_idx, trade = day_filtered[day_sel]
+    # Sync session state to absolute position in filtered list
+    st.session_state.trade_idx = next(
+        k for k, (i, _) in enumerate(filtered) if i == orig_idx)
+
+    # Prev / Next step through full filtered list
+    abs_sel = st.session_state.trade_idx
     b1, b2, b3 = st.columns([1, 6, 1])
     with b1:
-        if st.button("◀ Prev") and sel > 0:
-            st.session_state.trade_idx = sel - 1
+        if st.button("◀ Prev") and abs_sel > 0:
+            st.session_state.trade_idx = abs_sel - 1
             st.rerun()
     with b3:
-        if st.button("Next ▶") and sel < len(filtered) - 1:
-            st.session_state.trade_idx = sel + 1
+        if st.button("Next ▶") and abs_sel < len(filtered) - 1:
+            st.session_state.trade_idx = abs_sel + 1
             st.rerun()
-
-    orig_idx, trade = filtered[sel]
 
     # Chart
     trade_date_key = trade['trade_date']
