@@ -221,13 +221,13 @@ def run_z25(df_full, zz_state, target_ext, start_date, end_date):
             if zz_confirmed[0] == 'LOW':
                 setup_side   = 'LONG'
                 pivot_a      = last_zz_low
-                pa_time      = row['datetime']
+                pa_time      = zz_ext_time   # actual low bar, not confirmation bar
                 pivot_b      = None; pb_time = None
                 entry_price  = None; stop_price = None; target_price = None
             else:
                 setup_side   = 'SHORT'
                 pivot_a      = last_zz_high
-                pa_time      = row['datetime']
+                pa_time      = zz_ext_time   # actual high bar, not confirmation bar
                 pivot_b      = None; pb_time = None
                 entry_price  = None; stop_price = None; target_price = None
 
